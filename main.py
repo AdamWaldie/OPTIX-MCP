@@ -23,7 +23,7 @@ from tools import register_tools
 load_dotenv()
 
 MCP_SERVER_VERSION = "1.0.0"
-OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "http://localhost:5000")
+OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "https://optixthreatintelligence.co.uk")
 MCP_HOST = os.environ.get("MCP_HOST", "0.0.0.0")
 MCP_PORT = int(os.environ.get("MCP_PORT", "8090"))
 

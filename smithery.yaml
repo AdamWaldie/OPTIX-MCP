@@ -3,16 +3,8 @@ startCommand:
   configSchema:
     type: object
     required:
-      - serverUrl
       - apiKey
     properties:
-      serverUrl:
-        type: string
-        title: OPTIX MCP Server URL
-        description: >-
-          Base URL of your running OPTIX MCP server, e.g.
-          https://your-optix-mcp.example.com or http://localhost:8090
-        default: http://localhost:8090
       apiKey:
         type: string
         title: OPTIX API Key
@@ -20,8 +12,7 @@ startCommand:
           Your OPTIX API key. Create one in OPTIX Settings → API Keys.
           Must be prefixed with optix_ (e.g. optix_abc123...).
   exampleConfig:
-    serverUrl: http://localhost:8090
     apiKey: optix_your_api_key_here
-  url: "{config.serverUrl}/mcp"
+  url: "https://optixthreatintelligence.co.uk/mcp"
   headers:
     X-API-Key: "{config.apiKey}"

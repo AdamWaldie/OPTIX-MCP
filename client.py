@@ -40,7 +40,7 @@ from models import (
     WatchlistEntry,
 )
 
-OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "http://localhost:5000")
+OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "https://optixthreatintelligence.co.uk")
 REQUEST_TIMEOUT = float(os.environ.get("OPTIX_REQUEST_TIMEOUT", "30"))
 
 

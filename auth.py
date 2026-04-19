@@ -11,7 +11,7 @@ from fastapi.security import APIKeyHeader
 from exceptions import OptixAuthError
 from models import AuthContext
 
-OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "http://localhost:5000")
+OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "https://optixthreatintelligence.co.uk")
 OPTIX_INTERNAL_SECRET = os.environ.get("OPTIX_INTERNAL_SECRET", "")
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
