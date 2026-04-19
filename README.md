@@ -12,7 +12,7 @@ A standalone Python/FastAPI server that implements the [Model Context Protocol (
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OPTIX_API_URL` | Yes | `http://localhost:5000` | Base URL of the OPTIX backend |
+| `OPTIX_API_URL` | No | `https://optixthreatintelligence.co.uk` | Base URL of the OPTIX backend. Override only when self-hosting. |
 | `MCP_HOST` | No | `0.0.0.0` | Host address the MCP server binds to |
 | `MCP_PORT` | No | `8090` | Port the MCP server listens on |
 | `OPTIX_REQUEST_TIMEOUT` | No | `30` | Seconds before upstream OPTIX calls time out |
@@ -20,6 +20,7 @@ A standalone Python/FastAPI server that implements the [Model Context Protocol (
 Create a `.env` file in the `OPTIX MCP/` directory to set these, or export them as shell variables.
 
 ```env
+# Only needed if self-hosting OPTIX at a custom URL:
 OPTIX_API_URL=https://your-optix-instance.example.com
 MCP_PORT=8090
 ```
@@ -58,17 +59,41 @@ Unauthenticated requests receive a structured `401` response:
 
 ## Connecting to Claude Desktop
 
-Add the following to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+**Recommended — via Smithery (no local install required):**
+
+Add the following to your Claude Desktop configuration file:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "optix": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@optixcybersecurity/optix-mcp",
+        "--",
+        "--api-key",
+        "optix_your_api_key_here"
+      ]
+    }
+  }
+}
+```
+
+**Alternative — self-hosted local server:**
 
 ```json
 {
   "mcpServers": {
     "optix": {
       "command": "python",
-      "args": ["/path/to/OPTIX MCP/main.py"],
+      "args": ["/path/to/OPTIX MCP/stdio.py"],
       "env": {
-        "OPTIX_API_URL": "https://your-optix-instance.example.com",
-        "MCP_PORT": "8090"
+        "OPTIX_API_KEY": "optix_your_api_key_here"
       }
     }
   }
@@ -77,15 +102,34 @@ Add the following to your Claude Desktop configuration file (`~/Library/Applicat
 
 ## Connecting to Cursor
 
-In Cursor settings → MCP → Add Server:
+**Recommended — hosted endpoint (no local install required):**
+
+Add to `~/.cursor/mcp.json`:
 
 ```json
 {
-  "name": "optix",
-  "transport": "sse",
-  "url": "http://localhost:8090/mcp",
-  "headers": {
-    "X-API-Key": "optix_your_api_key_here"
+  "mcpServers": {
+    "optix": {
+      "url": "https://optixthreatintelligence.co.uk/mcp",
+      "headers": {
+        "X-API-Key": "optix_your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+**Alternative — local server:**
+
+```json
+{
+  "mcpServers": {
+    "optix": {
+      "url": "http://localhost:8090/mcp",
+      "headers": {
+        "X-API-Key": "optix_your_api_key_here"
+      }
+    }
   }
 }
 ```
