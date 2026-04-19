@@ -13,6 +13,7 @@ from models import AuthContext
 
 OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "https://optixthreatintelligence.co.uk")
 OPTIX_INTERNAL_SECRET = os.environ.get("OPTIX_INTERNAL_SECRET", "")
+OPTIX_SKIP_AUTH = os.environ.get("OPTIX_SKIP_AUTH", "false").lower() in ("true", "1", "yes")
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -97,6 +98,23 @@ async def _validate_key_with_optix(api_key: str) -> AuthContext:
 
 
 async def require_api_key(x_api_key: Optional[str] = Security(_api_key_header)) -> str:
+    if OPTIX_SKIP_AUTH:
+        anon_ctx = AuthContext(
+            api_key_id=0,
+            api_key_name="anonymous",
+            user_id=None,
+            org_id=None,
+            permissions=[],
+            credit_balance=None,
+            credit_allocation=None,
+            is_credit_exempt=False,
+            credit_reset_date=None,
+            is_org_pool=False,
+        )
+        current_auth.set(anon_ctx)
+        current_api_key.set("")
+        return ""
+
     if not x_api_key:
         raise HTTPException(
             status_code=401,

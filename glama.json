@@ -1,5 +1,4 @@
 {
-  "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "OPTIX MCP Server",
   "description": "Model Context Protocol server for the OPTIX threat intelligence platform. Exposes 26 analyst-friendly tools for querying threat feeds, searching indicators of compromise, reporting incidents, fetching threat entity intelligence, managing watchlists, triaging IOCs, generating SIEM detection rules, triggering AI research, and producing intelligence reports.",
   "homepage": "https://optixthreatintelligence.co.uk",

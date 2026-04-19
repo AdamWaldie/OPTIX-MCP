@@ -16,6 +16,7 @@ A standalone Python/FastAPI server that implements the [Model Context Protocol (
 | `MCP_HOST` | No | `0.0.0.0` | Host address the MCP server binds to |
 | `MCP_PORT` | No | `8090` | Port the MCP server listens on |
 | `OPTIX_REQUEST_TIMEOUT` | No | `30` | Seconds before upstream OPTIX calls time out |
+| `OPTIX_SKIP_AUTH` | No | `false` | When `true`, bypasses API key validation — allows unauthenticated tool listing (used by Glama registry inspection). Never set to `true` in production. |
 
 Create a `.env` file in the `OPTIX MCP/` directory to set these, or export them as shell variables.
 
@@ -538,6 +539,22 @@ Applies a triage verdict to one or more IOCs, recording analyst judgement about 
 | `entity_ids` | integer[] | Yes | List of OPTIX IOC entity IDs (find with `search_indicator`) |
 | `status` | string | Yes | `confirmed`, `false_positive`, `benign`, `expired`, `monitoring`, or `unresolved` |
 | `scope` | string | No | `platform` (global decision, default) or `org` (organisation-scoped) |
+
+---
+
+## Glama Registry Inspection
+
+When the OPTIX MCP server is listed on [Glama](https://glama.ai), the registry builds a Docker image and connects to the server to detect available tools. Because Glama does not have a real OPTIX API key, authentication must be temporarily bypassed.
+
+In the Glama server configuration, set the **Placeholder parameters** field to:
+
+```json
+{"OPTIX_SKIP_AUTH": "true"}
+```
+
+When `OPTIX_SKIP_AUTH=true` the server starts normally and accepts unauthenticated MCP sessions for tool listing. Tool *execution* will still return an appropriate error because no real API key is present — only `list_tools()` succeeds, which is all Glama requires to score tool quality.
+
+This flag has no effect in normal deployments where `OPTIX_SKIP_AUTH` defaults to `false`.
 
 ---
 
