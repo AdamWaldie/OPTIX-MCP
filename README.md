@@ -5,7 +5,7 @@ A standalone Python/FastAPI server that implements the [Model Context Protocol (
 ## Requirements
 
 - Python 3.11+
-- An active OPTIX installation
+- An active OPTIX Account
 - An OPTIX API key (create one in OPTIX Settings → API Keys)
 
 ## Environment Variables
