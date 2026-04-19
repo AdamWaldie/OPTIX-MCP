@@ -18,6 +18,7 @@ from mcp.server.sse import SseServerTransport, TransportSecuritySettings
 import client as optix_client
 from auth import require_api_key
 from models import HealthStatus
+from prompts import register_prompts
 from tools import register_tools
 
 load_dotenv()
@@ -42,6 +43,7 @@ _security_settings = TransportSecuritySettings(
 
 mcp_server = Server("optix-mcp")
 register_tools(mcp_server)
+register_prompts(mcp_server)
 
 sse_transport = SseServerTransport("/mcp/messages", security_settings=_security_settings)
 

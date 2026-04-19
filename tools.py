@@ -100,6 +100,12 @@ def register_tools(server: Server) -> None:
                     "or needs to filter by severity or TLP classification. Each entry includes a "
                     "severity rating, TLP label, IOC count, publisher, and AI summary."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -146,6 +152,12 @@ def register_tools(server: Server) -> None:
                     "URL, or email address and wants to know if OPTIX has seen it, with what confidence, "
                     "and which reports reference it."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -173,6 +185,12 @@ def register_tools(server: Server) -> None:
                     "and analyst notes. Returns a confirmation with the assigned reference ID. "
                     "NOTE: This operation costs 40 OPTIX credits. Call get_account_status first if "
                     "you are unsure whether the account has sufficient credits."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -225,6 +243,12 @@ def register_tools(server: Server) -> None:
                     "Returns a structured entity summary including description, confidence, aliases, "
                     "associated IOCs, and MITRE ATT&CK metadata."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -254,6 +278,12 @@ def register_tools(server: Server) -> None:
                     "credits used this month, reset date, and whether the account uses a shared "
                     "organisational credit pool."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -270,6 +300,12 @@ def register_tools(server: Server) -> None:
                     "Fetch a specific intelligence document from OPTIX by its numeric ID. "
                     "Returns full document metadata including title, publisher, TLP, severity, "
                     "AI summary, cyber score, and content type tags."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -293,6 +329,12 @@ def register_tools(server: Server) -> None:
                     "Full-text search across all OPTIX intelligence documents. Use this tool when an "
                     "analyst wants to find documents by keyword, topic, publisher, or content type. "
                     "Supports filtering by publisher and date range. Returns paginated document summaries."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -342,6 +384,12 @@ def register_tools(server: Server) -> None:
                     "strategic, operational, technical, or RFI) created by analysts or automated "
                     "pipelines. Optionally filter by report type, TLP level, or linked entity."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -380,6 +428,12 @@ def register_tools(server: Server) -> None:
                     "the full report content, status, TLP classification, and associated entities. "
                     "Use this after list_intelligence_reports to fetch the full text of a report."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -404,6 +458,12 @@ def register_tools(server: Server) -> None:
                     "Use this to understand detection coverage gaps or to look up a specific technique. "
                     "Returns overall coverage statistics and per-technique detail rows."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -426,6 +486,12 @@ def register_tools(server: Server) -> None:
                     "the analyst's OPTIX watchlist. Watchlisted entities trigger notifications when "
                     "new intelligence documents reference them."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -442,6 +508,12 @@ def register_tools(server: Server) -> None:
                     "Add an entity to the analyst's OPTIX watchlist so that new intelligence "
                     "documents mentioning it trigger notifications. Supply the numeric entity ID "
                     "(use get_entity to look up an entity ID from a name)."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
                 ),
                 inputSchema={
                     "type": "object",
@@ -464,6 +536,12 @@ def register_tools(server: Server) -> None:
                 description=(
                     "Remove an entity from the analyst's OPTIX watchlist to stop receiving "
                     "notifications about it. Supply the numeric entity ID."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
                 ),
                 inputSchema={
                     "type": "object",
@@ -489,6 +567,12 @@ def register_tools(server: Server) -> None:
                     "intelligence documents. Use when an analyst asks for a quick situational "
                     "awareness briefing or 'what's happening right now?'."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -506,6 +590,12 @@ def register_tools(server: Server) -> None:
                     "Each card profiles an active threat actor or malware campaign and shows "
                     "observed MITRE ATT&CK techniques, targeted sectors, document count, and "
                     "a severity assessment. Supports 24h, 7d, and 30d time windows."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -536,6 +626,12 @@ def register_tools(server: Server) -> None:
                     "malware families, associated ATT&CK techniques, and source documents. "
                     "Use this to assess an IOC's reputation and threat context."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -559,6 +655,12 @@ def register_tools(server: Server) -> None:
                     "it references and determine which lack detection rule coverage. Returns a "
                     "per-technique breakdown showing whether each technique has at least one "
                     "detection procedure, and counts the total coverage gaps."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -584,6 +686,12 @@ def register_tools(server: Server) -> None:
                     "aliases, and related terms before searching. Use 'keyword' mode for literal "
                     "matching. Returns ranked document hits, named entities, and optionally an "
                     "AI-synthesised answer."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -618,6 +726,12 @@ def register_tools(server: Server) -> None:
                     "NOTE: This operation costs 15 OPTIX credits. Call get_account_status first if "
                     "you are unsure whether the account has sufficient credits."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -649,6 +763,12 @@ def register_tools(server: Server) -> None:
                     f"Supported SIEM languages: {_SIEM_LANG_CHOICES}. "
                     "NOTE: This operation costs 4 OPTIX credits."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -678,6 +798,12 @@ def register_tools(server: Server) -> None:
                     "document or entity. "
                     f"Supported SIEM languages: {_SIEM_LANG_CHOICES}. "
                     "NOTE: This operation costs 4 OPTIX credits."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
                 ),
                 inputSchema={
                     "type": "object",
@@ -725,6 +851,12 @@ def register_tools(server: Server) -> None:
                     f"Supported SIEM languages: {_SIEM_LANG_CHOICES}. "
                     "NOTE: This operation costs 4 OPTIX credits."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -768,6 +900,12 @@ def register_tools(server: Server) -> None:
                     "NOTE: This operation costs 40 OPTIX credits. Call get_account_status first if "
                     "you are unsure whether the account has sufficient credits."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=True,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -810,6 +948,12 @@ def register_tools(server: Server) -> None:
                     "is not relevant to the organisation's threat profile. Community votes improve "
                     "OPTIX scoring and feed personalisation over time."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -845,6 +989,12 @@ def register_tools(server: Server) -> None:
                     "severity=critical, contentType=ThreatResearch as a named view. Returns the "
                     "saved view ID and name."
                 ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -879,6 +1029,12 @@ def register_tools(server: Server) -> None:
                     "benign, expired, or under monitoring. Supports bulk operations on multiple IOC "
                     "entity IDs at once. Scope as 'platform' to share the decision globally or 'org' "
                     "to keep it within your organisation."
+                ),
+                annotations=types.ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
                 ),
                 inputSchema={
                     "type": "object",

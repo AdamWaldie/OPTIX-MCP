@@ -11,8 +11,30 @@ startCommand:
         description: >-
           Your OPTIX API key. Create one in OPTIX Settings → API Keys.
           Must be prefixed with optix_ (e.g. optix_abc123...).
+      defaultTlp:
+        type: string
+        title: Default TLP Classification
+        description: >-
+          Default Traffic Light Protocol classification applied when a tool call
+          does not specify one. Accepts TLP:WHITE, TLP:GREEN, or TLP:AMBER.
+          Defaults to TLP:GREEN.
+        enum:
+          - "TLP:WHITE"
+          - "TLP:GREEN"
+          - "TLP:AMBER"
+        default: "TLP:GREEN"
+      debug:
+        type: boolean
+        title: Debug Mode
+        description: >-
+          When true, the server emits verbose request/response logging to
+          stdout. Useful for troubleshooting MCP client connectivity issues.
+          Defaults to false.
+        default: false
   exampleConfig:
     apiKey: optix_your_api_key_here
+    defaultTlp: "TLP:GREEN"
+    debug: false
   url: "https://optixthreatintelligence.co.uk/mcp"
   headers:
     X-API-Key: "{config.apiKey}"
