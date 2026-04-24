@@ -10,7 +10,7 @@ startCommand:
         title: OPTIX API Key
         description: >-
           Your OPTIX API key. Create one in OPTIX Settings → API Keys.
-          Must be prefixed with optix_ (e.g. optix_abc123...).
+          Must be prefixed with optx_ (e.g. optx_abc123...).
       defaultTlp:
         type: string
         title: Default TLP Classification
@@ -32,9 +32,531 @@ startCommand:
           Defaults to false.
         default: false
   exampleConfig:
-    apiKey: optix_your_api_key_here
+    apiKey: optx_your_api_key_here
     defaultTlp: "TLP:GREEN"
     debug: false
   url: "https://optixthreatintelligence.co.uk/mcp"
   headers:
     X-API-Key: "{config.apiKey}"
+tools:
+  - name: get_threat_feed
+    description: >-
+      Retrieve the OPTIX threat intelligence feed — a paginated stream of curated,
+      scored intelligence documents from all configured sources. Use this tool when
+      an analyst asks for recent threat reports, wants to browse new intelligence,
+      or needs to filter by severity or TLP classification. Each entry includes a
+      severity rating, TLP label, IOC count, publisher, and AI summary.
+    inputSchema:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: "Maximum number of entries to return (1–100). Default: 20."
+          default: 20
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          description: "Number of entries to skip for pagination. Default: 0."
+          default: 0
+          minimum: 0
+        severity_filter:
+          type: string
+          description: "Filter by severity level. One of: critical, high, medium, low."
+          enum: ["critical", "high", "medium", "low"]
+        tlp_filter:
+          type: string
+          description: "Filter by TLP classification. One of: TLP:WHITE, TLP:GREEN, TLP:AMBER, TLP:RED."
+          enum: ["TLP:WHITE", "TLP:GREEN", "TLP:AMBER", "TLP:RED"]
+        since:
+          type: string
+          description: "ISO 8601 datetime. Only return documents published after this time."
+      required: []
+
+  - name: search_indicator
+    description: >-
+      Search OPTIX for a specific indicator of compromise (IOC) by value or type.
+      Use this tool when an analyst provides an IP address, domain name, file hash,
+      URL, or email address and wants to know if OPTIX has seen it, with what confidence,
+      and which reports reference it.
+    inputSchema:
+      type: object
+      properties:
+        value:
+          type: string
+          description: "The indicator value to search for, e.g. '185.220.101.45', 'malicious-domain.ru'."
+        type_hint:
+          type: string
+          description: "Optional entity type to narrow the search. Valid values: IOC, Infrastructure, ThreatActor, MalwareFamily."
+      required: ["value"]
+
+  - name: report_incident
+    description: >-
+      Submit a structured incident report to OPTIX and generate a tactical intelligence
+      report. Provide the incident title, description, severity, TLP, observed indicators,
+      and analyst notes. Returns a confirmation with the assigned reference ID.
+      NOTE: This operation costs 40 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        title:
+          type: string
+          description: "Short descriptive title for the incident."
+          minLength: 3
+          maxLength: 300
+        description:
+          type: string
+          description: "Detailed narrative of the incident including the attack chain."
+          minLength: 10
+        severity:
+          type: string
+          description: "Incident severity level."
+          enum: ["critical", "high", "medium", "low"]
+        tlp:
+          type: string
+          description: "TLP classification. Accepts TLP:WHITE, TLP:GREEN, or TLP:AMBER. Default: TLP:GREEN."
+          default: "TLP:GREEN"
+          enum: ["TLP:WHITE", "TLP:GREEN", "TLP:AMBER"]
+        indicators:
+          type: array
+          items:
+            type: string
+          description: "List of raw indicator values observed during the incident."
+        analyst_notes:
+          type: string
+          description: "Additional analyst context, hypotheses, or remediation steps."
+      required: ["title", "description", "severity"]
+
+  - name: get_entity
+    description: >-
+      Fetch a named threat intelligence entity from OPTIX by name or numeric ID.
+      Use this when an analyst asks about a specific threat actor (e.g. 'APT28'),
+      malware family (e.g. 'LockBit'), campaign, vulnerability, or tool.
+      Returns a structured entity summary including description, confidence, aliases,
+      associated IOCs, and MITRE ATT&CK metadata.
+    inputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Name or numeric ID of the entity. Examples: 'APT28', 'CVE-2023-44487', '42'."
+          minLength: 1
+        entity_type:
+          type: string
+          description: "Optional type to narrow the search: ThreatActor, MalwareFamily, Tool, Campaign, Vulnerability, Technique, IOC, Infrastructure, Target."
+      required: ["query"]
+
+  - name: get_account_status
+    description: >-
+      Retrieve the current OPTIX account credit balance, monthly allocation, usage,
+      and account context. Use this before performing credit-consuming operations,
+      or when the analyst asks how many credits remain.
+    inputSchema:
+      type: object
+      properties: {}
+      required: []
+
+  - name: get_document
+    description: >-
+      Fetch a specific intelligence document from OPTIX by its numeric ID.
+      Returns full document metadata including title, publisher, TLP, severity,
+      AI summary, cyber score, and content type tags.
+    inputSchema:
+      type: object
+      properties:
+        document_id:
+          type: integer
+          description: "Numeric OPTIX document identifier, e.g. 1042."
+          minimum: 1
+      required: ["document_id"]
+
+  - name: search_documents
+    description: >-
+      Full-text search across all OPTIX intelligence documents. Use this tool when an
+      analyst wants to find documents by keyword, topic, publisher, or content type.
+      Supports filtering by publisher and date range. Returns paginated document summaries.
+    inputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Search string, minimum 2 characters. Examples: 'LockBit', 'supply chain attack', 'CVE-2024-3400'."
+          minLength: 2
+        limit:
+          type: integer
+          description: "Maximum results to return (1–100). Default: 20."
+          default: 20
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          description: "Results to skip for pagination. Default: 0."
+          default: 0
+          minimum: 0
+        publisher:
+          type: string
+          description: "Filter by publisher name, e.g. 'Mandiant', 'CISA'."
+        content_type:
+          type: string
+          description: "Filter by content type tag: ThreatResearch, MalwareAnalysis, Vulnerability, etc."
+        since:
+          type: string
+          description: "ISO 8601 datetime. Only return documents published after this time."
+      required: ["query"]
+
+  - name: list_intelligence_reports
+    description: >-
+      List intelligence reports stored in OPTIX. These are generated reports (tactical,
+      strategic, operational, technical, or RFI) created by analysts or automated
+      pipelines. Optionally filter by report type, TLP level, or linked entity.
+    inputSchema:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: "Maximum reports to return (1–200). Default: 20."
+          default: 20
+          minimum: 1
+          maximum: 200
+        report_type:
+          type: string
+          description: "Filter by type: tactical, strategic, technical, operational, rfi."
+          enum: ["tactical", "strategic", "technical", "operational", "rfi"]
+        tlp_level:
+          type: string
+          description: "Filter by TLP level, e.g. 'TLP:GREEN'."
+        entity_id:
+          type: integer
+          description: "Filter to reports referencing this entity ID."
+      required: []
+
+  - name: get_intelligence_report
+    description: >-
+      Retrieve a specific OPTIX intelligence report by its numeric ID, including
+      the full report content, status, TLP classification, and associated entities.
+      Use this after list_intelligence_reports to fetch the full text of a report.
+    inputSchema:
+      type: object
+      properties:
+        report_id:
+          type: integer
+          description: "Numeric intelligence report identifier."
+          minimum: 1
+      required: ["report_id"]
+
+  - name: get_attack_matrix
+    description: >-
+      Retrieve the OPTIX MITRE ATT&CK coverage matrix showing which techniques
+      have been observed in intelligence data and which have existing detection rules.
+      Use this to understand detection coverage gaps or to look up a specific technique.
+    inputSchema:
+      type: object
+      properties:
+        technique_id:
+          type: string
+          description: "Specific MITRE ATT&CK technique ID to look up, e.g. 'T1566'. Omit to get the full matrix."
+      required: []
+
+  - name: get_watchlist
+    description: >-
+      List all threat actors, malware families, and other entities currently on
+      the analyst's OPTIX watchlist. Watchlisted entities trigger notifications when
+      new intelligence documents reference them.
+    inputSchema:
+      type: object
+      properties: {}
+      required: []
+
+  - name: add_to_watchlist
+    description: >-
+      Add an entity to the analyst's OPTIX watchlist so that new intelligence documents
+      mentioning it trigger notifications. Supply the numeric entity ID (use get_entity
+      to look up an entity ID from a name).
+    inputSchema:
+      type: object
+      properties:
+        entity_id:
+          type: integer
+          description: "Numeric OPTIX entity identifier to start watching."
+          minimum: 1
+      required: ["entity_id"]
+
+  - name: remove_from_watchlist
+    description: >-
+      Remove an entity from the analyst's OPTIX watchlist to stop receiving notifications
+      about it. Supply the numeric entity ID.
+    inputSchema:
+      type: object
+      properties:
+        entity_id:
+          type: integer
+          description: "Numeric OPTIX entity identifier to stop watching."
+          minimum: 1
+      required: ["entity_id"]
+
+  - name: get_headlines
+    description: >-
+      Retrieve the current OPTIX threat intelligence headlines — a short list of
+      AI-synthesised sentences summarising the most active threats from recent intelligence
+      documents. Use when an analyst asks for a quick situational awareness briefing.
+    inputSchema:
+      type: object
+      properties: {}
+      required: []
+
+  - name: get_threat_cards
+    description: >-
+      Retrieve profile-matched situational awareness threat cards from OPTIX. Each card
+      profiles an active threat actor or malware campaign and shows observed MITRE ATT&CK
+      techniques, targeted sectors, document count, and a severity assessment. Supports
+      24h, 7d, and 30d time windows.
+    inputSchema:
+      type: object
+      properties:
+        time_range:
+          type: string
+          description: "Time window for threat card generation: 24h, 7d, or 30d. Default: 7d."
+          enum: ["24h", "7d", "30d"]
+          default: "7d"
+        sector:
+          type: string
+          description: "Filter cards to a specific sector, e.g. 'Finance', 'Healthcare'."
+      required: []
+
+  - name: get_ioc_context
+    description: >-
+      Retrieve enriched community context for an IOC — including analyst vote tallies
+      (malicious vs benign), community-assigned tags, co-occurring threat actors and
+      malware families, associated ATT&CK techniques, and source documents.
+    inputSchema:
+      type: object
+      properties:
+        ioc_id:
+          type: integer
+          description: "Numeric OPTIX entity identifier for the IOC. Use search_indicator to find the ID."
+          minimum: 1
+      required: ["ioc_id"]
+
+  - name: get_coverage_gaps
+    description: >-
+      Analyse a specific intelligence document to identify MITRE ATT&CK techniques it
+      references and determine which lack detection rule coverage. Returns a per-technique
+      breakdown and counts total coverage gaps.
+    inputSchema:
+      type: object
+      properties:
+        document_id:
+          type: integer
+          description: "Numeric OPTIX document identifier to analyse."
+          minimum: 1
+      required: ["document_id"]
+
+  - name: ai_search
+    description: >-
+      Natural language threat intelligence search across OPTIX documents and entities.
+      Use 'natural' mode for AI-expanded NLP search or 'keyword' mode for literal matching.
+      Returns ranked document hits, named entities, and optionally an AI-synthesised answer.
+    inputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: "Natural language question or keyword. Examples: 'What TTPs does APT29 use?', 'LockBit ransomware IOCs'."
+          minLength: 2
+        mode:
+          type: string
+          description: "Search mode: 'natural' for AI-expanded NLP search (default), 'keyword' for literal matching."
+          enum: ["natural", "keyword"]
+          default: "natural"
+      required: ["query"]
+
+  - name: research_entity
+    description: >-
+      Trigger deep AI research on a specific OPTIX entity (threat actor, malware family,
+      vulnerability, tool, campaign, or technique). OPTIX crawls authoritative sources and
+      enriches the entity's profile with structured intelligence.
+      NOTE: This operation costs 15 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        entity_id:
+          type: integer
+          description: "Numeric OPTIX entity identifier. Use get_entity to find it."
+          minimum: 1
+        force_refresh:
+          type: boolean
+          description: "Set true to force a new research run even if recent results exist. Default: false."
+          default: false
+      required: ["entity_id"]
+
+  - name: ask_entity
+    description: >-
+      Generate a SIEM threat hunting query for a specific threat entity (ThreatActor,
+      MalwareFamily, Tool, or Vulnerability). Supported SIEM languages: kql, splunk_spl,
+      s1ql_v1, s1ql_v2, crowdstrike, elastic_eql, exabeam, chronicle_yara_l, sigma,
+      carbon_black, palo_alto_xql. NOTE: This operation costs 4 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        entity_id:
+          type: integer
+          description: "Numeric OPTIX entity identifier (ThreatActor, MalwareFamily, Tool, or Vulnerability)."
+          minimum: 1
+        language:
+          type: string
+          description: "Target SIEM language. Supported: kql, splunk_spl, s1ql_v1, s1ql_v2, crowdstrike, elastic_eql, exabeam, chronicle_yara_l, sigma, carbon_black, palo_alto_xql."
+      required: ["entity_id", "language"]
+
+  - name: generate_detection_rule
+    description: >-
+      Generate a SIEM detection rule for a specific MITRE ATT&CK technique. Supported
+      SIEM languages: kql, splunk_spl, s1ql_v1, s1ql_v2, crowdstrike, elastic_eql,
+      exabeam, chronicle_yara_l, sigma, carbon_black, palo_alto_xql.
+      NOTE: This operation costs 4 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        technique_id:
+          type: string
+          description: "MITRE ATT&CK technique ID, e.g. 'T1059.001' (PowerShell)."
+        language:
+          type: string
+          description: "Target SIEM language. Supported: kql, splunk_spl, s1ql_v1, s1ql_v2, crowdstrike, elastic_eql, exabeam, chronicle_yara_l, sigma, carbon_black, palo_alto_xql."
+        technique_name:
+          type: string
+          description: "Human-readable technique name, e.g. 'PowerShell'. Improves generation quality."
+        document_id:
+          type: integer
+          description: "Optional document ID to incorporate document-specific detection context."
+        entity_id:
+          type: integer
+          description: "Optional entity ID (ThreatActor or MalwareFamily) to enrich the rule."
+        custom_context:
+          type: string
+          description: "Additional analyst context to guide generation, e.g. specific log sources or environment details."
+      required: ["technique_id", "language"]
+
+  - name: generate_tradecraft_query
+    description: >-
+      Generate a SIEM threat hunting query covering the complete known tradecraft of a
+      specific threat actor or malware family. Produces a broad multi-technique hunt
+      targeting the named adversary. Supported SIEM languages: kql, splunk_spl, s1ql_v1,
+      s1ql_v2, crowdstrike, elastic_eql, exabeam, chronicle_yara_l, sigma, carbon_black,
+      palo_alto_xql. NOTE: This operation costs 4 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        language:
+          type: string
+          description: "Target SIEM language. Supported: kql, splunk_spl, s1ql_v1, s1ql_v2, crowdstrike, elastic_eql, exabeam, chronicle_yara_l, sigma, carbon_black, palo_alto_xql."
+        entity_name:
+          type: string
+          description: "Name of the threat actor or malware family, e.g. 'APT29' or 'LockBit'."
+        entity_type:
+          type: string
+          description: "Entity type: ThreatActor or MalwareFamily."
+          enum: ["ThreatActor", "MalwareFamily"]
+        entity_id:
+          type: integer
+          description: "Optional OPTIX entity ID to enrich the query with structured intelligence."
+        technique_entries:
+          type: array
+          description: "Optional technique scope list. Each item may have techniqueId, techniqueName, description."
+          items:
+            type: object
+      required: ["language", "entity_name", "entity_type"]
+
+  - name: generate_report
+    description: >-
+      Generate a strategic, operational, technical, or RFI intelligence report in OPTIX
+      using a natural language query. Returns a report ID retrievable with
+      get_intelligence_report once generation completes.
+      NOTE: This operation costs 40 OPTIX credits.
+    inputSchema:
+      type: object
+      properties:
+        title:
+          type: string
+          description: "Report title, e.g. 'Q3 Ransomware Threat Landscape'."
+          minLength: 3
+          maxLength: 300
+        query:
+          type: string
+          description: "Natural language description of what the report should cover."
+          minLength: 10
+        report_type:
+          type: string
+          description: "Report type: tactical, strategic, technical, operational, or rfi. Default: tactical."
+          enum: ["tactical", "strategic", "technical", "operational", "rfi"]
+          default: "tactical"
+        tlp:
+          type: string
+          description: "TLP classification for the report. Default: TLP:GREEN."
+          enum: ["TLP:WHITE", "TLP:GREEN", "TLP:AMBER"]
+          default: "TLP:GREEN"
+      required: ["title", "query"]
+
+  - name: submit_feedback
+    description: >-
+      Submit a relevance vote (upvote or downvote) on an OPTIX intelligence document.
+      Community votes improve OPTIX scoring and feed personalisation over time.
+    inputSchema:
+      type: object
+      properties:
+        document_id:
+          type: integer
+          description: "Numeric OPTIX document identifier to vote on."
+          minimum: 1
+        vote:
+          type: string
+          description: "Vote direction: 'up' for relevant, 'down' for not relevant."
+          enum: ["up", "down"]
+        scope:
+          type: string
+          description: "Vote visibility: 'platform' (all analysts) or 'org' (your organisation only). Default: platform."
+          enum: ["platform", "org"]
+          default: "platform"
+      required: ["document_id", "vote"]
+
+  - name: save_feed_view
+    description: >-
+      Save a named feed filter configuration in OPTIX so the analyst can recall it later.
+      Returns the saved view ID and name.
+    inputSchema:
+      type: object
+      properties:
+        name:
+          type: string
+          description: "Human-readable name for this saved view, e.g. 'Critical malware last 7 days'."
+          minLength: 1
+          maxLength: 200
+        filters:
+          type: object
+          description: "Filter configuration to save. Common keys: severity, tlp, contentType, publisher, publishedAfter, publishedBefore."
+          default: {}
+      required: ["name"]
+
+  - name: triage_ioc
+    description: >-
+      Apply a triage verdict to one or more IOCs in OPTIX. Supports bulk operations on
+      multiple IOC entity IDs. Scope as 'platform' to share the decision globally or
+      'org' to keep it within your organisation.
+    inputSchema:
+      type: object
+      properties:
+        entity_ids:
+          type: array
+          items:
+            type: integer
+          description: "List of OPTIX entity IDs (IOCs) to triage. At least one required."
+          minItems: 1
+        status:
+          type: string
+          description: "Triage verdict: confirmed (active malicious), false_positive, benign (known good), expired (formerly active), monitoring, unresolved."
+          enum: ["confirmed", "false_positive", "expired", "benign", "monitoring", "unresolved"]
+        scope:
+          type: string
+          description: "Decision scope: 'platform' (global) or 'org' (organisation-only). Default: platform."
+          enum: ["platform", "org"]
+          default: "platform"
+      required: ["entity_ids", "status"]

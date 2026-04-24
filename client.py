@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 import httpx
 
@@ -30,6 +33,8 @@ from models import (
     SavedView,
     SearchHit,
     SearchResponse,
+    ThreatActorListEntry,
+    ThreatActorProfile,
     ThreatCard,
     ThreatFeedEntry,
     ThreatFeedPage,
@@ -452,12 +457,45 @@ async def report_incident(
 # Entity lookup
 # ---------------------------------------------------------------------------
 
+def _score_entity_result(result: dict[str, Any], query_norm: str) -> int:
+    """
+    Score a search result against a normalised query string.
+
+    Returns (higher = better match):
+      4 — exact canonical name match
+      3 — exact alias match
+      2 — canonical name starts-with / contains the query
+      1 — any alias starts-with / contains the query
+      0 — no text evidence (fallback to backend rank)
+    """
+    name_norm = (result.get("name") or "").strip().lower()
+    raw_aliases = result.get("aliases") or []
+    if isinstance(raw_aliases, str):
+        try:
+            import json as _json_inner_score
+            raw_aliases = _json_inner_score.loads(raw_aliases)
+        except Exception:
+            raw_aliases = []
+    alias_norms = [str(a).strip().lower() for a in raw_aliases if a]
+
+    if name_norm == query_norm:
+        return 4
+    if query_norm in alias_norms:
+        return 3
+    if query_norm in name_norm or name_norm.startswith(query_norm):
+        return 2
+    if any(query_norm in a or a.startswith(query_norm) for a in alias_norms):
+        return 1
+    return 0
+
+
 async def get_entity(
     api_key: str,
     query: str,
     entity_type: Optional[str] = None,
 ) -> Entity:
-    params: dict[str, Any] = {"q": query, "limit": 5}
+    # Fetch more candidates so client-side ranking has material to work with.
+    params: dict[str, Any] = {"q": query, "limit": 10}
     if entity_type:
         params["type"] = entity_type
 
@@ -479,7 +517,10 @@ async def get_entity(
                 f"No entity found matching '{query}'" + (f" with type '{entity_type}'" if entity_type else "")
             )
 
-    best = results[0]
+    # Rank candidates client-side; stable sort preserves backend order for ties.
+    query_norm = query.strip().lower()
+    ranked = sorted(results, key=lambda r: _score_entity_result(r, query_norm), reverse=True)
+    best = ranked[0]
     ent = await _get(api_key, f"/api/entities/{best['id']}")
     return _map_entity(ent)
 
@@ -495,12 +536,49 @@ def _map_entity(ent: dict[str, Any]) -> Entity:
 
     metadata = ent.get("metadata") or {}
 
+    def _extract_ioc_values(source: Any) -> list[str]:
+        """Return a flat list of IOC value strings from a raw array or scalar."""
+        if not source:
+            return []
+        if isinstance(source, str):
+            return [source]
+        if isinstance(source, list):
+            out: list[str] = []
+            for item in source:
+                if isinstance(item, str) and item:
+                    out.append(item)
+                elif isinstance(item, dict):
+                    # Accept common keys: value, indicator, ioc, name
+                    for k in ("value", "indicator", "ioc", "name"):
+                        v = item.get(k)
+                        if v and isinstance(v, str):
+                            out.append(v)
+                            break
+            return out
+        return []
+
     ioc_names: list[str] = []
+    seen_ioc_vals: set[str] = set()
+
+    def _add_iocs(vals: list[str]) -> None:
+        for v in vals:
+            if v not in seen_ioc_vals:
+                seen_ioc_vals.add(v)
+                ioc_names.append(v)
+
+    # 1. Top-level array fields on the entity dict.
+    for top_key in ("iocs", "indicators", "associatedIocs", "associated_iocs", "relatedIocs"):
+        _add_iocs(_extract_ioc_values(ent.get(top_key)))
+
+    # 2. Metadata array fields.
     if isinstance(metadata, dict):
-        for key in ("iocType", "infrastructure", "c2Protocol"):
-            val = metadata.get(key)
+        for meta_key in ("iocs", "indicators", "relatedIndicators", "iocValues", "observables"):
+            _add_iocs(_extract_ioc_values(metadata.get(meta_key)))
+        # 3. Legacy string scalar fields (historical data shapes).
+        for scalar_key in ("iocType", "infrastructure", "c2Protocol"):
+            val = metadata.get(scalar_key)
             if val and isinstance(val, str):
-                ioc_names.append(val)
+                _add_iocs([val])
 
     return Entity(
         id=ent["id"],
@@ -631,6 +709,7 @@ async def list_intelligence_reports(
     report_type: Optional[str] = None,
     tlp_level: Optional[str] = None,
     entity_id: Optional[int] = None,
+    sort: Optional[str] = None,
 ) -> IntelligenceReportPage:
     params: dict[str, Any] = {"limit": min(limit, 200)}
     if report_type:
@@ -639,12 +718,22 @@ async def list_intelligence_reports(
         params["tlpLevel"] = tlp_level
     if entity_id is not None:
         params["entityId"] = entity_id
+    if sort:
+        params["sort"] = sort
 
     data = await _get(api_key, "/api/intelligence-reports", params)
 
-    raw: list[dict[str, Any]] = data if isinstance(data, list) else data.get("reports", [])
+    if isinstance(data, list):
+        raw: list[dict[str, Any]] = data
+        backend_total: Optional[int] = None
+    else:
+        raw = data.get("reports", [])
+        # Prefer explicit backend total/count if provided.
+        backend_total = data.get("total") or data.get("count") or data.get("totalCount")
+
     items = [_map_intel_report(r) for r in raw if isinstance(r, dict) and r.get("id")]
-    return IntelligenceReportPage(items=items, total=len(items))
+    total = int(backend_total) if backend_total is not None else len(items)
+    return IntelligenceReportPage(items=items, total=total)
 
 
 async def get_intelligence_report(api_key: str, report_id: int) -> IntelligenceReport:
@@ -1197,4 +1286,267 @@ async def triage_ioc(
         updated=int(data.get("updated") or len(entity_ids)),
         status=status,
         entity_ids=entity_ids,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Threat actor listing (free read)
+# ---------------------------------------------------------------------------
+
+def _parse_threat_actor_entry(ent: dict[str, Any]) -> Optional["ThreatActorListEntry"]:
+    """Map a raw entity dict to a ThreatActorListEntry. Returns None if data is invalid."""
+    if not isinstance(ent, dict) or not ent.get("id"):
+        return None
+    aliases = ent.get("aliases") or []
+    if isinstance(aliases, str):
+        try:
+            import json as _json_inner
+            aliases = _json_inner.loads(aliases)
+        except Exception:
+            aliases = []
+    metadata = ent.get("metadata") or {}
+    actor_type: Optional[str] = None
+    if isinstance(metadata, dict):
+        actor_type = metadata.get("actorType") or metadata.get("type") or metadata.get("nationState")
+    return ThreatActorListEntry(
+        id=int(ent["id"]),
+        name=ent.get("name") or "Unknown",
+        aliases=aliases if isinstance(aliases, list) else [],
+        confidence=float(ent.get("confidence") or 0.5),
+        first_seen=_parse_dt(ent.get("firstSeen") or ent.get("first_seen")),
+        last_seen=_parse_dt(ent.get("lastSeen") or ent.get("last_seen")),
+        actor_type=str(actor_type) if actor_type else None,
+    )
+
+
+async def list_threat_actors(
+    api_key: str,
+    limit: Optional[int] = None,
+) -> tuple[list[ThreatActorListEntry], list[str]]:
+    """
+    Return ALL ThreatActor entities tracked by this workspace, paginating as needed.
+
+    Returns a tuple of (entries, notes) where notes contains any partial-failure
+    warnings to surface to the caller.
+    """
+    PAGE_SIZE = 100
+    entries: list[ThreatActorListEntry] = []
+    notes: list[str] = []
+    seen_ids: set[int] = set()
+    offset = 0
+    used_fallback = False
+
+    while True:
+        params: dict[str, Any] = {"type": "ThreatActor", "limit": PAGE_SIZE, "offset": offset}
+        try:
+            data = await _get(api_key, "/api/entities", params)
+        except OptixNotFoundError:
+            # /api/entities endpoint not available; fall back to search.
+            try:
+                data = await _get(
+                    api_key, "/api/entities/search",
+                    {"q": "*", "type": "ThreatActor", "limit": PAGE_SIZE, "offset": offset},
+                )
+                used_fallback = True
+            except Exception:
+                notes.append(
+                    "Actor list fetch failed — results may be incomplete. "
+                    "Try calling `list_threat_actors` again or contact your OPTIX administrator."
+                )
+                break
+        except (OptixAuthError, OptixApiError):
+            # Propagate auth errors and unrecoverable server errors — do not silently return empty.
+            raise
+
+        results: list[dict[str, Any]] = []
+        if isinstance(data, dict):
+            results = data.get("results", data.get("entities", data.get("data", [])))
+        elif isinstance(data, list):
+            results = data
+
+        if not results:
+            break  # No more pages
+
+        page_added = 0
+        for ent in results:
+            entry = _parse_threat_actor_entry(ent)
+            if entry is None or entry.id in seen_ids:
+                continue
+            seen_ids.add(entry.id)
+            entries.append(entry)
+            page_added += 1
+            if limit is not None and len(entries) >= limit:
+                if used_fallback:
+                    notes.append(
+                        "Note: actor list used a fallback search endpoint which may not support "
+                        "full pagination — the complete inventory may not be shown."
+                    )
+                return entries, notes
+
+        if used_fallback:
+            # Fallback search does not reliably support offset-based pagination; stop after first page.
+            break
+
+        if page_added == 0 or len(results) < PAGE_SIZE:
+            break  # Exhausted all pages
+
+        offset += PAGE_SIZE
+
+    if used_fallback:
+        notes.append(
+            "Note: actor list used a fallback search endpoint which may not support "
+            "full pagination — the complete inventory may not be shown."
+        )
+
+    return entries, notes
+
+
+# ---------------------------------------------------------------------------
+# Composite threat actor profile (free read — composes existing calls)
+# ---------------------------------------------------------------------------
+
+async def get_threat_actor_profile(
+    api_key: str,
+    actor_name: str,
+) -> ThreatActorProfile:
+    """
+    One-shot composite lookup: resolve actor by name or alias, then enrich with
+    linked IOC context and intelligence report data.  No credits consumed —
+    all underlying calls are free read-only operations.
+    """
+    entity = await get_entity(api_key, actor_name, entity_type="ThreatActor")
+
+    # Alias resolution: compare query (case-insensitive, stripped) to canonical
+    # name and each known alias to determine whether a resolution occurred.
+    alias_resolved: Optional[str] = None
+    query_norm = actor_name.strip().lower()
+    name_norm = entity.name.strip().lower()
+    alias_norms = [a.strip().lower() for a in entity.aliases]
+    if query_norm != name_norm:
+        if query_norm in alias_norms:
+            alias_resolved = f"Resolved alias '{actor_name}' → {entity.name}"
+        else:
+            # Partial / backend search match
+            alias_resolved = f"Resolved '{actor_name}' → {entity.name}"
+
+    # Fan out: enrich up to 5 associated IOCs with full context (free read, best-effort).
+    # Primary: use entity.associated_iocs (IOC value strings directly linked to this actor).
+    # Fallback: text-search for IOC entities by actor name if primary yields < 5 results.
+    ioc_contexts: list[IOCContext] = []
+    ioc_ids_seen: set[int] = set()
+    ioc_enrichment_errors = 0
+    enrichment_notes: list[str] = []
+
+    async def _enrich_ioc_results(raw_results: list[dict[str, Any]]) -> None:
+        """Enrich IOC result dicts; mutates ioc_contexts, ioc_ids_seen, and counters in closure."""
+        nonlocal ioc_enrichment_errors
+        for ioc_ent in raw_results:
+            if len(ioc_contexts) >= 5:
+                break
+            if not isinstance(ioc_ent, dict):
+                continue
+            ioc_id = ioc_ent.get("id")
+            if not ioc_id:
+                continue
+            ioc_id = int(ioc_id)
+            if ioc_id in ioc_ids_seen:
+                continue
+            ioc_ids_seen.add(ioc_id)
+            try:
+                ctx = await get_ioc_context(api_key, ioc_id)
+                ioc_contexts.append(ctx)
+            except Exception as exc:
+                ioc_enrichment_errors += 1
+                logger.debug("IOC enrichment failed for entity_id=%s: %s", ioc_id, exc)
+
+    # Primary: search each known associated IOC value by exact indicator value.
+    ioc_search_failed = False
+    if entity.associated_iocs:
+        try:
+            for ioc_value in entity.associated_iocs[:10]:
+                if len(ioc_contexts) >= 5:
+                    break
+                try:
+                    search_data = await _get(
+                        api_key,
+                        "/api/entities/search",
+                        {"q": ioc_value, "type": "IOC", "limit": 5},
+                    )
+                    results: list[dict[str, Any]] = []
+                    if isinstance(search_data, dict):
+                        results = search_data.get("results", [])
+                    elif isinstance(search_data, list):
+                        results = search_data
+                    await _enrich_ioc_results(results)
+                except Exception as exc:
+                    ioc_enrichment_errors += 1
+                    logger.debug("IOC search failed for value %r: %s", ioc_value, exc)
+        except Exception as exc:
+            ioc_search_failed = True
+            logger.debug("Primary IOC search loop failed for actor %r: %s", entity.name, exc)
+
+    # Fallback: text-search IOC entities by actor name if still under the limit.
+    if len(ioc_contexts) < 5:
+        try:
+            fallback_data = await _get(
+                api_key,
+                "/api/entities/search",
+                {"q": entity.name, "type": "IOC", "limit": 10},
+            )
+            fb_results: list[dict[str, Any]] = []
+            if isinstance(fallback_data, dict):
+                fb_results = fallback_data.get("results", [])
+            elif isinstance(fallback_data, list):
+                fb_results = fallback_data
+            await _enrich_ioc_results(fb_results)
+        except Exception as exc:
+            ioc_search_failed = True
+            logger.debug("Fallback IOC search failed for actor %r: %s", entity.name, exc)
+
+    if ioc_search_failed:
+        enrichment_notes.append("IOC search was partially unavailable; some IOC indicators may not appear.")
+    if ioc_enrichment_errors > 0:
+        enrichment_notes.append(
+            f"{ioc_enrichment_errors} IOC enrichment call(s) failed — community context may be incomplete."
+        )
+
+    # Fetch linked intelligence reports (free read, best-effort).
+    # Use a generous limit so the page total reflects as many reports as possible;
+    # if the backend returns an explicit total field, that is used for the count regardless.
+    # sort=desc requests the most-recent-first ordering; ignored by backends that don't support it.
+    linked_report_count = 0
+    latest_report_summary: Optional[str] = None
+    latest_report_id: Optional[int] = None
+    try:
+        reports_page = await list_intelligence_reports(
+            api_key, limit=200, entity_id=entity.id, sort="desc"
+        )
+        linked_report_count = reports_page.total
+        # Sort client-side by created_at descending so "latest" is deterministic
+        # regardless of whether the backend honoured sort=desc.
+        sorted_reports = sorted(
+            reports_page.items,
+            key=lambda r: r.created_at or datetime.min,
+            reverse=True,
+        )
+        for report in sorted_reports:
+            if report.summary:
+                latest_report_summary = report.summary
+                latest_report_id = report.id
+                break
+    except Exception as exc:
+        logger.debug("Intelligence report fetch failed for entity_id=%s: %s", entity.id, exc)
+        enrichment_notes.append(
+            "Intelligence report fetch failed — report count and summary may be unavailable. "
+            "Try calling `list_intelligence_reports` directly with entity_id for details."
+        )
+
+    return ThreatActorProfile(
+        entity=entity,
+        alias_resolved=alias_resolved,
+        ioc_contexts=ioc_contexts,
+        linked_report_count=linked_report_count,
+        latest_report_summary=latest_report_summary,
+        latest_report_id=latest_report_id,
+        enrichment_notes=enrichment_notes,
     )

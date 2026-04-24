@@ -224,6 +224,7 @@ class HealthStatus(BaseModel):
     optix_connected: bool = Field(description="Whether the OPTIX backend is reachable")
     optix_url: str = Field(description="OPTIX backend URL this server is configured to use")
     timestamp: datetime = Field(description="UTC timestamp of this health check")
+    uptime_seconds: float = Field(default=0.0, description="Seconds elapsed since the MCP server process started")
 
 
 class AuthContext(BaseModel):
@@ -536,3 +537,68 @@ class TriageResult(BaseModel):
     updated: int = Field(description="Number of IOCs whose triage status was updated")
     status: str = Field(description="The triage status that was applied")
     entity_ids: list[int] = Field(description="Entity IDs that were triaged")
+
+
+# ---------------------------------------------------------------------------
+# Threat actor listing model
+# ---------------------------------------------------------------------------
+
+class ThreatActorListEntry(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    id: int = Field(description="Internal OPTIX entity identifier")
+    name: str = Field(description="Canonical threat actor name, e.g. 'APT28'")
+    aliases: list[str] = Field(
+        default_factory=list,
+        description="Known alternate names or aliases for this actor",
+    )
+    confidence: float = Field(
+        default=0.5,
+        description="Confidence score from 0.0 to 1.0 in the entity classification",
+    )
+    first_seen: Optional[datetime] = Field(
+        default=None,
+        description="Earliest date this actor was observed in OPTIX source intelligence",
+    )
+    last_seen: Optional[datetime] = Field(
+        default=None,
+        description="Most recent date this actor was observed in OPTIX source intelligence",
+    )
+    actor_type: Optional[str] = Field(
+        default=None,
+        description="Actor sub-type when available, e.g. nation-state, cybercriminal, hacktivist",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Composite threat actor profile model
+# ---------------------------------------------------------------------------
+
+class ThreatActorProfile(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    entity: Entity = Field(description="Resolved entity record for the threat actor")
+    alias_resolved: Optional[str] = Field(
+        default=None,
+        description="Resolution note when the input name was an alias, e.g. \"Resolved 'Fancy Bear' → APT28\"",
+    )
+    ioc_contexts: list[IOCContext] = Field(
+        default_factory=list,
+        description="Enriched context for up to 5 IOCs linked to this actor, fetched from the IOC triage context endpoint",
+    )
+    linked_report_count: int = Field(
+        default=0,
+        description="Number of OPTIX intelligence reports referencing this actor",
+    )
+    latest_report_summary: Optional[str] = Field(
+        default=None,
+        description="Summary from the most recent linked intelligence report, if one exists",
+    )
+    latest_report_id: Optional[int] = Field(
+        default=None,
+        description="ID of the most recent linked intelligence report",
+    )
+    enrichment_notes: list[str] = Field(
+        default_factory=list,
+        description="Non-fatal warnings about partial enrichment failures (e.g. IOC or report fetch errors)",
+    )

@@ -24,6 +24,7 @@ async def main() -> None:
 
     from auth import _validate_key_with_optix, current_api_key, current_auth
     from exceptions import OptixAuthError
+    from prompts import register_prompts
     from tools import register_tools
 
     try:
@@ -37,6 +38,7 @@ async def main() -> None:
 
     mcp_server = Server("optix-mcp")
     register_tools(mcp_server)
+    register_prompts(mcp_server)
 
     async with stdio_server() as (read_stream, write_stream):
         await mcp_server.run(

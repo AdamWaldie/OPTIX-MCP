@@ -5,7 +5,7 @@ import os
 from typing import Optional
 
 import httpx
-from fastapi import HTTPException, Security
+from fastapi import HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
 from exceptions import OptixAuthError
@@ -97,7 +97,10 @@ async def _validate_key_with_optix(api_key: str) -> AuthContext:
     )
 
 
-async def require_api_key(x_api_key: Optional[str] = Security(_api_key_header)) -> str:
+async def require_api_key(
+    request: Request,
+    x_api_key: Optional[str] = Security(_api_key_header),
+) -> str:
     if OPTIX_SKIP_AUTH:
         anon_ctx = AuthContext(
             api_key_id=0,
@@ -115,12 +118,24 @@ async def require_api_key(x_api_key: Optional[str] = Security(_api_key_header)) 
         current_api_key.set("")
         return ""
 
+    # Accept Authorization: Bearer <key> as an alias for X-API-Key.
+    # This supports OAuth-aware MCP clients (Smithery, Claude.ai) that use the
+    # standard Bearer token flow after completing the RFC 9728 discovery.
+    # The OPTIX API key IS the bearer token — no real OAuth exchange is needed.
+    if not x_api_key:
+        auth_header: str = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            x_api_key = auth_header[7:].strip() or None
+
     if not x_api_key:
         raise HTTPException(
             status_code=401,
             detail={
                 "error": "Missing API key",
-                "detail": "Provide your OPTIX API key in the X-API-Key request header.",
+                "detail": (
+                    "Provide your OPTIX API key in the X-API-Key request header "
+                    "or as Authorization: Bearer <key>."
+                ),
                 "docs": "See README.md for instructions on obtaining an API key.",
             },
         )
@@ -134,7 +149,7 @@ async def require_api_key(x_api_key: Optional[str] = Security(_api_key_header)) 
             status_code=exc.status_code,
             detail={
                 "error": exc.message,
-                "detail": "The supplied X-API-Key was rejected by the OPTIX backend.",
+                "detail": "The supplied API key was rejected by the OPTIX backend.",
             },
         )
 

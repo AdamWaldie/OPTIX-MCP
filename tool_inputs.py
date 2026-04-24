@@ -460,6 +460,42 @@ class SaveFeedViewInput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Threat actor composite profile input
+# ---------------------------------------------------------------------------
+
+class GetThreatActorProfileInput(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    actor_name: str = Field(
+        description=(
+            "Name or known alias of the threat actor to profile. "
+            "Accepts canonical names ('APT28') and common aliases ('Fancy Bear', 'Sofacy', 'IRON TWILIGHT'). "
+            "Lookup is case-insensitive and resolves aliases to the canonical entity automatically. "
+            "Example: 'APT29', 'Cozy Bear', 'LockBit', 'Lazarus Group'."
+        ),
+        min_length=1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Threat actor list input
+# ---------------------------------------------------------------------------
+
+class ListThreatActorsInput(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    limit: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional cap on the number of threat actors returned. "
+            "Omit (or leave null) to retrieve all tracked actors (paginated internally). "
+            "Use a limit only when you need a quick sample."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # IOC triage input
 # ---------------------------------------------------------------------------
 

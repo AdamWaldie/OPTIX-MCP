@@ -155,40 +155,67 @@ After every successful credit-consuming call the server re-fetches the credit ba
 
 ---
 
+## Plan Tier Requirements
+
+OPTIX enforces plan-tier access controls on its REST API. The MCP server exposes only analyst-level endpoints — **admin-only endpoints are not exposed through MCP** regardless of the API key used.
+
+The minimum OPTIX plan required for each tool depends on the underlying REST endpoint it calls:
+
+| Tier | Description | MCP Tools Available |
+|---|---|---|
+| **Free** | Basic read access to threat intelligence | `get_threat_feed`, `search_indicator`, `get_entity`, `get_account_status`, `get_document`, `search_documents`, `get_attack_matrix`, `get_headlines`, `get_threat_cards`, `get_coverage_gaps`, `ai_search`, `get_watchlist`, `add_to_watchlist`, `remove_from_watchlist`, `triage_ioc`, `submit_feedback`, `save_feed_view` |
+| **Individual** | Full analyst access — enrichment, detection rules, entity research | All Free tools + `get_ioc_context`, `research_entity`, `ask_entity`, `generate_detection_rule`, `generate_tradecraft_query`, `report_incident`, `generate_report` |
+| **Team** | Shared intelligence and TAXII — multi-analyst org features | All Individual tools + TAXII-related workflows (via direct API) |
+| **Enterprise** | Organisation administration and compliance reporting | All Team tools + org admin workflows (via direct API; not MCP-exposed) |
+
+> **Note:** Admin-only endpoints (audit log, organisation member management, provider key configuration, compliance reports, and organisation overview) are never exposed through the MCP server. These require `org_admin` or `platform_admin` role and must be called via the REST API directly using an admin-scoped API key.
+
+### Checking Your Plan
+
+To verify which tier and tools are available to your API key:
+
+```python
+# Using the MCP server
+result = await client.call_tool("get_account_status", {})
+print(result)  # Shows current plan tier and available features
+```
+
+---
+
 ## Available Tools
 
 > **Authentication:** All tools authenticate via the `X-API-Key` header set in your MCP client configuration — there is no `api_key` tool parameter. The key is validated against the OPTIX backend on every request.
 
 ### Tool Overview
 
-| # | Tool | Category | Cost |
-|---|---|---|---|
-| 1 | `get_threat_feed` | Read | Free |
-| 2 | `search_indicator` | Read | Free |
-| 3 | `report_incident` | Write | 40 credits |
-| 4 | `get_entity` | Read | Free |
-| 5 | `get_account_status` | Read | Free |
-| 6 | `get_document` | Read | Free |
-| 7 | `search_documents` | Read | Free |
-| 8 | `list_intelligence_reports` | Read | Free |
-| 9 | `get_intelligence_report` | Read | Free |
-| 10 | `get_attack_matrix` | Read | Free |
-| 11 | `get_watchlist` | Read | Free |
-| 12 | `add_to_watchlist` | Write | Free |
-| 13 | `remove_from_watchlist` | Write | Free |
-| 14 | `get_headlines` | Read | Free |
-| 15 | `get_threat_cards` | Read | Free |
-| 16 | `get_ioc_context` | Read | Free |
-| 17 | `get_coverage_gaps` | Read | Free |
-| 18 | `ai_search` | Read | Free |
-| 19 | `research_entity` | AI / Write | 15 credits |
-| 20 | `ask_entity` | AI / Write | 4 credits |
-| 21 | `generate_detection_rule` | AI / Write | 4 credits |
-| 22 | `generate_tradecraft_query` | AI / Write | 4 credits |
-| 23 | `generate_report` | AI / Write | 40 credits |
-| 24 | `submit_feedback` | Write | Free |
-| 25 | `save_feed_view` | Write | Free |
-| 26 | `triage_ioc` | Write | Free |
+| # | Tool | Category | Min Tier | Cost |
+|---|---|---|---|---|
+| 1 | `get_threat_feed` | Read | Free | Free |
+| 2 | `search_indicator` | Read | Free | Free |
+| 3 | `report_incident` | Write | Individual | 40 credits |
+| 4 | `get_entity` | Read | Free | Free |
+| 5 | `get_account_status` | Read | Free | Free |
+| 6 | `get_document` | Read | Free | Free |
+| 7 | `search_documents` | Read | Free | Free |
+| 8 | `list_intelligence_reports` | Read | Free | Free |
+| 9 | `get_intelligence_report` | Read | Free | Free |
+| 10 | `get_attack_matrix` | Read | Free | Free |
+| 11 | `get_watchlist` | Read | Free | Free |
+| 12 | `add_to_watchlist` | Write | Free | Free |
+| 13 | `remove_from_watchlist` | Write | Free | Free |
+| 14 | `get_headlines` | Read | Free | Free |
+| 15 | `get_threat_cards` | Read | Free | Free |
+| 16 | `get_ioc_context` | Read | Individual | Free |
+| 17 | `get_coverage_gaps` | Read | Free | Free |
+| 18 | `ai_search` | Read | Free | Free |
+| 19 | `research_entity` | AI / Write | Individual | 15 credits |
+| 20 | `ask_entity` | AI / Write | Individual | 4 credits |
+| 21 | `generate_detection_rule` | AI / Write | Individual | 4 credits |
+| 22 | `generate_tradecraft_query` | AI / Write | Individual | 4 credits |
+| 23 | `generate_report` | AI / Write | Individual | 40 credits |
+| 24 | `submit_feedback` | Write | Free | Free |
+| 25 | `save_feed_view` | Write | Free | Free |
+| 26 | `triage_ioc` | Write | Free | Free |
 
 ---
 
