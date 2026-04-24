@@ -58,9 +58,9 @@ def register_prompts(server: Server) -> None:
                                 f"Please produce a structured threat intelligence brief for **{entity_name}** "
                                 f"using available OPTIX data.\n\n"
                                 f"Steps:\n"
-                                f"1. Use `get_entity` to look up {entity_name} and retrieve its OPTIX profile.\n"
-                                f"2. Use `search_documents` to find recent intelligence documents mentioning {entity_name}.\n"
-                                f"3. Use `get_headlines` to check whether {entity_name} appears in current headlines.\n"
+                                f"1. Use `entity.get` to look up {entity_name} and retrieve its OPTIX profile.\n"
+                                f"2. Use `search.documents` to find recent intelligence documents mentioning {entity_name}.\n"
+                                f"3. Use `feed.headlines` to check whether {entity_name} appears in current headlines.\n"
                                 f"4. Synthesise the findings into the following sections:\n\n"
                                 f"   **Attribution & Overview** — Who is {entity_name}? Sponsorship, origin, motivation.\n"
                                 f"   **Recent Activity** — Latest observed campaigns or incidents (past 90 days).\n"
@@ -87,14 +87,14 @@ def register_prompts(server: Server) -> None:
                             text=(
                                 f"Please run a structured triage workflow for the indicator: **{indicator}**\n\n"
                                 f"Follow these steps in order:\n\n"
-                                f"1. **Search** — Use `search_indicator` with value='{indicator}' to check if OPTIX has seen this indicator and retrieve its entity ID.\n"
-                                f"2. **Enrich** — If an entity ID is found, use `get_ioc_context` to retrieve community votes, co-occurring threat actors, and source documents.\n"
-                                f"3. **Document context** — Use `search_documents` to find any intelligence reports that mention '{indicator}'.\n"
+                                f"1. **Search** — Use `search.indicator` with value='{indicator}' to check if OPTIX has seen this indicator and retrieve its entity ID.\n"
+                                f"2. **Enrich** — If an entity ID is found, use `ioc.context` to retrieve community votes, co-occurring threat actors, and source documents.\n"
+                                f"3. **Document context** — Use `search.documents` to find any intelligence reports that mention '{indicator}'.\n"
                                 f"4. **Confidence assessment** — Based on the above, rate confidence that the indicator is malicious: High / Medium / Low / Unknown.\n"
                                 f"5. **Verdict** — Choose one of: confirmed | false_positive | benign | expired | monitoring | unresolved.\n"
-                                f"6. **Record verdict** — Use `triage_ioc` to apply the verdict to the IOC entity (use the entity ID from step 1).\n"
+                                f"6. **Record verdict** — Use `ioc.triage` to apply the verdict to the IOC entity (use the entity ID from step 1).\n"
                                 f"7. **Summary** — Provide a brief triage summary including: indicator value, type, verdict, confidence, key evidence, and recommended next steps.\n\n"
-                                f"If `search_indicator` returns no results, report that the indicator is not in the OPTIX database and suggest submitting it via `report_incident` if it was observed in an active incident."
+                                f"If `search.indicator` returns no results, report that the indicator is not in the OPTIX database and suggest submitting it via `incident.report` if it was observed in an active incident."
                             ),
                         ),
                     ),

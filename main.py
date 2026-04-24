@@ -4,7 +4,7 @@ import hashlib
 import os
 import re as _re
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
@@ -18,7 +18,7 @@ from mcp.server.sse import SseServerTransport, TransportSecuritySettings
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 import client as optix_client
-from auth import require_api_key
+from auth import optional_api_key
 from models import HealthStatus
 from prompts import register_prompts
 import tools as _tools_module
@@ -31,6 +31,75 @@ _START_TIME = time.monotonic()
 OPTIX_API_URL = os.environ.get("OPTIX_API_URL", "https://optixthreatintelligence.co.uk")
 MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
 MCP_PORT = int(os.environ.get("MCP_PORT", "8090"))
+
+# ---------------------------------------------------------------------------
+# Rate limiting — sliding-window counters keyed by client IP.
+#
+# MCP_ANON_RATE_LIMIT  : max requests per minute for unauthenticated callers
+#                        (default 20).  Set to 0 to disable.
+# MCP_AUTH_RATE_LIMIT  : max requests per minute for authenticated callers
+#                        (default 600 — effectively a safety ceiling only).
+#                        Set to 0 to exempt authenticated callers entirely.
+# MCP_TRUST_PROXY      : set to "true" / "1" / "yes" when the MCP server sits
+#                        behind a trusted reverse proxy (e.g. nginx or the Node
+#                        Express layer).  When enabled, the leftmost address in
+#                        X-Forwarded-For is used as the rate-limit key so that
+#                        all clients do not collapse to a single proxy IP.
+#                        Leave unset (the default) when the server is directly
+#                        reachable, to prevent IP spoofing via crafted headers.
+# ---------------------------------------------------------------------------
+_MCP_ANON_RATE_LIMIT: int = int(os.environ.get("MCP_ANON_RATE_LIMIT", "20"))
+_MCP_AUTH_RATE_LIMIT: int = int(os.environ.get("MCP_AUTH_RATE_LIMIT", "600"))
+_MCP_TRUST_PROXY: bool = os.environ.get("MCP_TRUST_PROXY", "false").lower() in (
+    "true", "1", "yes"
+)
+_RATE_WINDOW_SECONDS: float = 60.0
+
+# ip -> deque of monotonic timestamps (one deque per IP per auth tier)
+_anon_hits: dict[str, deque[float]] = {}
+_auth_hits: dict[str, deque[float]] = {}
+
+# Bound the number of tracked IPs to avoid unbounded memory growth.
+_RATE_REGISTRY_MAX = 4096
+
+
+def _prune_hits(hits: deque[float], now: float) -> None:
+    """Remove timestamps that have fallen outside the sliding window."""
+    while hits and now - hits[0] >= _RATE_WINDOW_SECONDS:
+        hits.popleft()
+
+
+def _check_rate(
+    registry: dict[str, deque[float]],
+    ip: str,
+    limit: int,
+) -> None:
+    """Record a hit for *ip* and raise 429 if the limit is exceeded."""
+    now = time.monotonic()
+    if ip not in registry:
+        if len(registry) >= _RATE_REGISTRY_MAX:
+            # Evict the oldest-inserted entry to keep memory bounded.
+            oldest = next(iter(registry))
+            del registry[oldest]
+        registry[ip] = deque()
+    hits = registry[ip]
+    _prune_hits(hits, now)
+    if len(hits) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "Too Many Requests",
+                "detail": (
+                    f"Anonymous MCP connections are limited to {limit} per minute "
+                    "per IP address. Provide a valid X-API-Key to raise this limit."
+                    if registry is _anon_hits
+                    else f"Authenticated MCP connections are limited to {limit} per minute per IP address."
+                ),
+            },
+            headers={"Retry-After": str(int(_RATE_WINDOW_SECONDS))},
+        )
+    hits.append(now)
+
 
 _security_settings = TransportSecuritySettings(
     enable_dns_rebinding_protection=os.environ.get(
@@ -90,6 +159,47 @@ def _register_session(session_id: str, key_hash: str) -> None:
     _session_owners[session_id] = key_hash
 
 
+def _client_ip(request: Request) -> str:
+    """Return the effective client IP for rate-limiting purposes.
+
+    When MCP_TRUST_PROXY is enabled the leftmost value of X-Forwarded-For is
+    used so that real client addresses are preserved when the server sits behind
+    a trusted reverse proxy (e.g. the Node.js Express layer or nginx).
+    When MCP_TRUST_PROXY is *not* set (the default) the raw ASGI client address
+    is used to prevent IP spoofing via crafted X-Forwarded-For headers.
+    """
+    if _MCP_TRUST_PROXY:
+        xff = request.headers.get("X-Forwarded-For", "")
+        if xff:
+            return xff.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+async def _mcp_rate_limit(
+    request: Request,
+    api_key: str = Depends(optional_api_key),
+) -> str:
+    """FastAPI dependency that enforces per-IP rate limits on MCP endpoints.
+
+    Anonymous callers (no API key) are subject to MCP_ANON_RATE_LIMIT requests
+    per minute (default 20).  Authenticated callers are subject to
+    MCP_AUTH_RATE_LIMIT requests per minute (default 600), which acts as a
+    safety ceiling rather than a practical throttle.  Setting either limit to 0
+    skips the check for that tier entirely.
+
+    The check runs *before* any MCP transport code is invoked, so rejected
+    requests never reach _streamable_manager or sse_transport.
+    """
+    ip = _client_ip(request)
+    if api_key:
+        if _MCP_AUTH_RATE_LIMIT > 0:
+            _check_rate(_auth_hits, ip, _MCP_AUTH_RATE_LIMIT)
+    else:
+        if _MCP_ANON_RATE_LIMIT > 0:
+            _check_rate(_anon_hits, ip, _MCP_ANON_RATE_LIMIT)
+    return api_key
+
+
 async def _require_localhost(request: Request) -> None:
     """Dependency that restricts access to requests originating from localhost only.
 
@@ -106,6 +216,11 @@ async def _require_localhost(request: Request) -> None:
         )
 
 
+def _key_hash_or_sentinel(api_key: str) -> str:
+    """Return the SHA-256 hash of api_key, or the sentinel '' for anonymous callers."""
+    return _hash_key(api_key) if api_key else ""
+
+
 def _verify_session(session_id: Optional[str], api_key: str) -> None:
     if session_id is None:
         raise HTTPException(
@@ -118,7 +233,10 @@ def _verify_session(session_id: Optional[str], api_key: str) -> None:
             status_code=404,
             detail={"error": "Session not found — it may have expired or never been opened"},
         )
-    if expected != _hash_key(api_key):
+    caller_hash = _key_hash_or_sentinel(api_key)
+    # '' == '' for anonymous ↔ anonymous; hash == hash for authenticated.
+    # Mismatches (anon trying an authenticated session, or vice versa) are rejected.
+    if expected != caller_hash:
         raise HTTPException(
             status_code=403,
             detail={"error": "API key does not match the session owner"},
@@ -193,14 +311,15 @@ async def admin_tools(_: None = Depends(_require_localhost)) -> list[dict]:
 
 
 @app.get("/mcp", tags=["MCP"])
-async def mcp_sse_endpoint(request: Request, api_key: str = Depends(require_api_key)):
+async def mcp_sse_endpoint(request: Request, api_key: str = Depends(_mcp_rate_limit)):
     """
     SSE endpoint for MCP clients (Claude Desktop, Cursor, etc.).
-    Validates X-API-Key against OPTIX. The session is bound to the validated
-    key — subsequent POST /mcp/messages requests for this session are only
-    accepted if they carry the same key.
+    Opening a connection and listing tools requires no credentials; invoking
+    a tool requires a valid X-API-Key (enforced at the MCP layer).  The session
+    is bound to the key used at open-time — subsequent POST /mcp/messages
+    requests are only accepted with the same key (or no key for anonymous sessions).
     """
-    key_hash = _hash_key(api_key)
+    key_hash = _key_hash_or_sentinel(api_key)
 
     async def _tracking_send(message: dict) -> None:
         if message.get("type") == "http.response.body":
@@ -222,24 +341,24 @@ async def mcp_sse_endpoint(request: Request, api_key: str = Depends(require_api_
 
 
 @app.post("/mcp", tags=["MCP"])
-async def mcp_streamable_endpoint(request: Request, api_key: str = Depends(require_api_key)):
+async def mcp_streamable_endpoint(request: Request, api_key: str = Depends(_mcp_rate_limit)):
     """
     Streamable HTTP endpoint for modern MCP clients (Smithery, Claude.ai, etc.).
-    Uses the MCP 2025-03-26 streamable HTTP transport. Validates X-API-Key against
-    OPTIX. Sessions are tracked via the mcp-session-id response/request header.
+    Uses the MCP 2025-03-26 streamable HTTP transport.
 
-    Session-owner binding mirrors the SSE path: when a client continues an
-    existing session (mcp-session-id request header present) the stored key hash
-    must match — any other valid API key is rejected with 403.  When the manager
-    issues a new session ID in the response headers we record the owner so future
-    requests can be verified.
+    initialize and tools/list are open to unauthenticated callers so that
+    scanners (Smithery, Claude.ai discovery) can see the tool manifest without
+    credentials.  Tool invocation is gated at the MCP layer by get_current_api_key().
+
+    Session-owner binding: anonymous sessions (sentinel '') only accept messages
+    without a key; authenticated sessions only accept the original key hash.
+    Mismatches are rejected with 403 before reaching the transport layer.
 
     ClosedResourceError / BrokenResourceError / EndOfStream are suppressed here —
     they arise when a client (e.g. Smithery manifest scanner) closes the TCP
-    connection before the response is fully written. Letting them propagate would
-    crash the uvicorn worker; swallowing them is safe because the client is gone.
+    connection before the response is fully written.
     """
-    key_hash = _hash_key(api_key)
+    key_hash = _key_hash_or_sentinel(api_key)
     incoming_sid = request.headers.get("mcp-session-id")
 
     # Verify ownership of an existing session before forwarding the request.
@@ -279,13 +398,13 @@ async def mcp_streamable_endpoint(request: Request, api_key: str = Depends(requi
 
 
 @app.post("/mcp/messages", tags=["MCP"])
-async def mcp_post_messages(request: Request, api_key: str = Depends(require_api_key)):
+async def mcp_post_messages(request: Request, api_key: str = Depends(optional_api_key)):
     """
     Receives POST messages from MCP clients linked to an existing SSE session.
-    Validates both that the API key is valid (via require_api_key) AND that it
-    matches the key used to open the target SSE session (session-to-owner binding).
-    Requests carrying a valid-but-different key are rejected with 403 before they
-    reach the transport layer.
+    Verifies that the key (or lack of key) matches the one used to open the
+    target SSE session (session-to-owner binding).  Unauthenticated messages
+    are accepted for anonymous sessions; authenticated messages are accepted only
+    when the key hash matches the session owner recorded at open-time.
     """
     session_id = request.query_params.get("session_id")
     _verify_session(session_id, api_key)

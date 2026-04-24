@@ -1,6 +1,6 @@
 # OPTIX MCP Server
 
-A standalone Python/FastAPI server that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for the OPTIX threat intelligence platform. It exposes 26 analyst-friendly tools that AI assistants and programmatic consumers can use to query threat feeds, search documents and indicators, manage watchlists, triage IOCs, generate detection rules, trigger AI research, and produce intelligence reports — without needing to understand OPTIX's internal REST API.
+A standalone Python/FastAPI server that implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) for the OPTIX threat intelligence platform. It exposes 28 analyst-friendly tools that AI assistants and programmatic consumers can use to query threat feeds, search documents and indicators, manage watchlists, triage IOCs, generate detection rules, trigger AI research, and produce intelligence reports — without needing to understand OPTIX's internal REST API.
 
 ## Requirements
 
@@ -141,16 +141,16 @@ Add to `~/.cursor/mcp.json`:
 
 Several tools consume OPTIX credits. The server enforces a **pre-flight credit check** before making any upstream call: if the cached balance is known to be insufficient, it returns an error immediately without deducting or attempting the operation.
 
-After every successful credit-consuming call the server re-fetches the credit balance so that `get_account_status` always reflects the current state.
+After every successful credit-consuming call the server re-fetches the credit balance so that `account.status` always reflects the current state.
 
 | Operation | Cost |
 |---|---|
-| `report_incident` | 40 credits |
-| `generate_report` | 40 credits |
-| `research_entity` | 15 credits |
-| `ask_entity` | 4 credits |
-| `generate_detection_rule` | 4 credits |
-| `generate_tradecraft_query` | 4 credits |
+| `incident.report` | 40 credits |
+| `report.generate` | 40 credits |
+| `entity.research` | 15 credits |
+| `entity.ask` | 4 credits |
+| `detection.rule` | 4 credits |
+| `detection.tradecraft` | 4 credits |
 | All other tools | Free |
 
 ---
@@ -163,8 +163,8 @@ The minimum OPTIX plan required for each tool depends on the underlying REST end
 
 | Tier | Description | MCP Tools Available |
 |---|---|---|
-| **Free** | Basic read access to threat intelligence | `get_threat_feed`, `search_indicator`, `get_entity`, `get_account_status`, `get_document`, `search_documents`, `get_attack_matrix`, `get_headlines`, `get_threat_cards`, `get_coverage_gaps`, `ai_search`, `get_watchlist`, `add_to_watchlist`, `remove_from_watchlist`, `triage_ioc`, `submit_feedback`, `save_feed_view` |
-| **Individual** | Full analyst access — enrichment, detection rules, entity research | All Free tools + `get_ioc_context`, `research_entity`, `ask_entity`, `generate_detection_rule`, `generate_tradecraft_query`, `report_incident`, `generate_report` |
+| **Free** | Basic read access to threat intelligence | `feed.get`, `search.indicator`, `entity.get`, `account.status`, `document.get`, `search.documents`, `detection.attack_matrix`, `feed.headlines`, `feed.cards`, `detection.coverage_gaps`, `search.ai`, `watchlist.list`, `watchlist.add`, `watchlist.remove`, `ioc.triage`, `feedback.vote`, `feed.save_view`, `actor.profile`, `actor.list` |
+| **Individual** | Full analyst access — enrichment, detection rules, entity research | All Free tools + `ioc.context`, `entity.research`, `entity.ask`, `detection.rule`, `detection.tradecraft`, `incident.report`, `report.generate` |
 | **Team** | Shared intelligence and TAXII — multi-analyst org features | All Individual tools + TAXII-related workflows (via direct API) |
 | **Enterprise** | Organisation administration and compliance reporting | All Team tools + org admin workflows (via direct API; not MCP-exposed) |
 
@@ -176,7 +176,7 @@ To verify which tier and tools are available to your API key:
 
 ```python
 # Using the MCP server
-result = await client.call_tool("get_account_status", {})
+result = await client.call_tool("account.status", {})
 print(result)  # Shows current plan tier and available features
 ```
 
@@ -190,36 +190,38 @@ print(result)  # Shows current plan tier and available features
 
 | # | Tool | Category | Min Tier | Cost |
 |---|---|---|---|---|
-| 1 | `get_threat_feed` | Read | Free | Free |
-| 2 | `search_indicator` | Read | Free | Free |
-| 3 | `report_incident` | Write | Individual | 40 credits |
-| 4 | `get_entity` | Read | Free | Free |
-| 5 | `get_account_status` | Read | Free | Free |
-| 6 | `get_document` | Read | Free | Free |
-| 7 | `search_documents` | Read | Free | Free |
-| 8 | `list_intelligence_reports` | Read | Free | Free |
-| 9 | `get_intelligence_report` | Read | Free | Free |
-| 10 | `get_attack_matrix` | Read | Free | Free |
-| 11 | `get_watchlist` | Read | Free | Free |
-| 12 | `add_to_watchlist` | Write | Free | Free |
-| 13 | `remove_from_watchlist` | Write | Free | Free |
-| 14 | `get_headlines` | Read | Free | Free |
-| 15 | `get_threat_cards` | Read | Free | Free |
-| 16 | `get_ioc_context` | Read | Individual | Free |
-| 17 | `get_coverage_gaps` | Read | Free | Free |
-| 18 | `ai_search` | Read | Free | Free |
-| 19 | `research_entity` | AI / Write | Individual | 15 credits |
-| 20 | `ask_entity` | AI / Write | Individual | 4 credits |
-| 21 | `generate_detection_rule` | AI / Write | Individual | 4 credits |
-| 22 | `generate_tradecraft_query` | AI / Write | Individual | 4 credits |
-| 23 | `generate_report` | AI / Write | Individual | 40 credits |
-| 24 | `submit_feedback` | Write | Free | Free |
-| 25 | `save_feed_view` | Write | Free | Free |
-| 26 | `triage_ioc` | Write | Free | Free |
+| 1 | `feed.get` | Read | Free | Free |
+| 2 | `search.indicator` | Read | Free | Free |
+| 3 | `incident.report` | Write | Individual | 40 credits |
+| 4 | `entity.get` | Read | Free | Free |
+| 5 | `account.status` | Read | Free | Free |
+| 6 | `document.get` | Read | Free | Free |
+| 7 | `search.documents` | Read | Free | Free |
+| 8 | `report.list` | Read | Free | Free |
+| 9 | `report.get` | Read | Free | Free |
+| 10 | `detection.attack_matrix` | Read | Free | Free |
+| 11 | `watchlist.list` | Read | Free | Free |
+| 12 | `watchlist.add` | Write | Free | Free |
+| 13 | `watchlist.remove` | Write | Free | Free |
+| 14 | `feed.headlines` | Read | Free | Free |
+| 15 | `feed.cards` | Read | Free | Free |
+| 16 | `ioc.context` | Read | Individual | Free |
+| 17 | `detection.coverage_gaps` | Read | Free | Free |
+| 18 | `search.ai` | Read | Free | Free |
+| 19 | `entity.research` | AI / Write | Individual | 15 credits |
+| 20 | `entity.ask` | AI / Write | Individual | 4 credits |
+| 21 | `detection.rule` | AI / Write | Individual | 4 credits |
+| 22 | `detection.tradecraft` | AI / Write | Individual | 4 credits |
+| 23 | `report.generate` | AI / Write | Individual | 40 credits |
+| 24 | `feedback.vote` | Write | Free | Free |
+| 25 | `feed.save_view` | Write | Free | Free |
+| 26 | `ioc.triage` | Write | Free | Free |
+| 27 | `actor.profile` | Read | Free | Free |
+| 28 | `actor.list` | Read | Free | Free |
 
 ---
 
-### `get_threat_feed`
+### `feed.get`
 
 Returns a paginated stream of curated, scored intelligence documents from all OPTIX sources.
 
@@ -235,7 +237,7 @@ Returns a paginated stream of curated, scored intelligence documents from all OP
 
 ---
 
-### `search_indicator`
+### `search.indicator`
 
 Searches OPTIX for a specific indicator of compromise (IOC) by value.
 
@@ -248,7 +250,7 @@ Searches OPTIX for a specific indicator of compromise (IOC) by value.
 
 ---
 
-### `report_incident` ⚡ 40 credits
+### `incident.report` ⚡ 40 credits
 
 Submits a structured incident report to OPTIX and generates a tactical intelligence report.
 
@@ -265,7 +267,7 @@ Submits a structured incident report to OPTIX and generates a tactical intellige
 
 ---
 
-### `get_entity`
+### `entity.get`
 
 Fetches a named threat intelligence entity (threat actor, malware, campaign, CVE, technique) by name or ID.
 
@@ -278,7 +280,7 @@ Fetches a named threat intelligence entity (threat actor, malware, campaign, CVE
 
 ---
 
-### `get_account_status`
+### `account.status`
 
 Returns your current OPTIX credit balance, monthly allocation, usage, reset date, and account context.
 
@@ -288,7 +290,7 @@ No parameters required.
 
 ---
 
-### `get_document`
+### `document.get`
 
 Fetches a specific intelligence document by its numeric OPTIX ID.
 
@@ -300,7 +302,7 @@ Fetches a specific intelligence document by its numeric OPTIX ID.
 
 ---
 
-### `search_documents`
+### `search.documents`
 
 Full-text search across all OPTIX intelligence documents.
 
@@ -317,7 +319,7 @@ Full-text search across all OPTIX intelligence documents.
 
 ---
 
-### `list_intelligence_reports`
+### `report.list`
 
 Lists generated intelligence reports (tactical, strategic, operational, technical, RFI) stored in OPTIX.
 
@@ -332,11 +334,11 @@ Lists generated intelligence reports (tactical, strategic, operational, technica
 
 ---
 
-### `get_intelligence_report`
+### `report.get`
 
 Retrieves the full content of a specific intelligence report.
 
-**When to use:** After `list_intelligence_reports` to fetch the full text of a report.
+**When to use:** After `report.list` to fetch the full text of a report.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -344,7 +346,7 @@ Retrieves the full content of a specific intelligence report.
 
 ---
 
-### `get_attack_matrix`
+### `detection.attack_matrix`
 
 Retrieves the OPTIX MITRE ATT&CK coverage matrix — which techniques have been observed in intelligence data and which have detection rules.
 
@@ -356,7 +358,7 @@ Retrieves the OPTIX MITRE ATT&CK coverage matrix — which techniques have been 
 
 ---
 
-### `get_watchlist`
+### `watchlist.list`
 
 Lists all entities on the analyst's OPTIX watchlist.
 
@@ -366,11 +368,11 @@ No parameters required.
 
 ---
 
-### `add_to_watchlist`
+### `watchlist.add`
 
 Adds an entity to the analyst's watchlist to receive notifications when new intelligence mentions it.
 
-**When to use:** "Start watching APT29" (get the entity ID first with `get_entity`).
+**When to use:** "Start watching APT29" (get the entity ID first with `entity.get`).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -378,7 +380,7 @@ Adds an entity to the analyst's watchlist to receive notifications when new inte
 
 ---
 
-### `remove_from_watchlist`
+### `watchlist.remove`
 
 Removes an entity from the analyst's watchlist.
 
@@ -390,7 +392,7 @@ Removes an entity from the analyst's watchlist.
 
 ---
 
-### `get_headlines`
+### `feed.headlines`
 
 Returns AI-synthesised threat intelligence headlines summarising the most active current threats.
 
@@ -400,7 +402,7 @@ No parameters required.
 
 ---
 
-### `get_threat_cards`
+### `feed.cards`
 
 Returns profile-matched situational awareness threat cards showing active threats with observed TTPs and targeted sectors.
 
@@ -413,7 +415,7 @@ Returns profile-matched situational awareness threat cards showing active threat
 
 ---
 
-### `get_ioc_context`
+### `ioc.context`
 
 Returns enriched community context for an IOC including analyst vote tallies, co-occurring threat actors and malware, ATT&CK techniques, and source documents.
 
@@ -421,11 +423,11 @@ Returns enriched community context for an IOC including analyst vote tallies, co
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `ioc_id` | integer | Yes | Numeric OPTIX entity ID for the IOC (find it with `search_indicator`) |
+| `ioc_id` | integer | Yes | Numeric OPTIX entity ID for the IOC (find it with `search.indicator`) |
 
 ---
 
-### `get_coverage_gaps`
+### `detection.coverage_gaps`
 
 Analyses an intelligence document to identify MITRE ATT&CK techniques it references and determines which lack detection coverage.
 
@@ -437,7 +439,7 @@ Analyses an intelligence document to identify MITRE ATT&CK techniques it referen
 
 ---
 
-### `ai_search`
+### `search.ai`
 
 Natural language or keyword search across OPTIX documents and entities with optional AI query expansion.
 
@@ -450,7 +452,7 @@ Natural language or keyword search across OPTIX documents and entities with opti
 
 ---
 
-### `research_entity` ⚡ 15 credits
+### `entity.research` ⚡ 15 credits
 
 Triggers deep AI research on an entity — OPTIX crawls authoritative sources and enriches the entity's profile with structured intelligence.
 
@@ -465,7 +467,7 @@ Supported entity types: `ThreatActor`, `MalwareFamily`, `Vulnerability`, `Tool`,
 
 ---
 
-### `ask_entity` ⚡ 4 credits
+### `entity.ask` ⚡ 4 credits
 
 Generates a SIEM threat hunting query for a specific entity using its known TTPs, IOCs, and intelligence history.
 
@@ -480,7 +482,7 @@ Supported entity types: `ThreatActor`, `MalwareFamily`, `Tool`, `Vulnerability`.
 
 ---
 
-### `generate_detection_rule` ⚡ 4 credits
+### `detection.rule` ⚡ 4 credits
 
 Generates a SIEM detection rule for a specific MITRE ATT&CK technique.
 
@@ -497,7 +499,7 @@ Generates a SIEM detection rule for a specific MITRE ATT&CK technique.
 
 ---
 
-### `generate_tradecraft_query` ⚡ 4 credits
+### `detection.tradecraft` ⚡ 4 credits
 
 Generates a broad SIEM hunting query covering the complete known tradecraft of a threat actor or malware family.
 
@@ -513,7 +515,7 @@ Generates a broad SIEM hunting query covering the complete known tradecraft of a
 
 ---
 
-### `generate_report` ⚡ 40 credits
+### `report.generate` ⚡ 40 credits
 
 Generates a strategic, operational, technical, or RFI intelligence report using OPTIX's document and entity corpus.
 
@@ -528,7 +530,7 @@ Generates a strategic, operational, technical, or RFI intelligence report using 
 
 ---
 
-### `submit_feedback`
+### `feedback.vote`
 
 Submits a relevance vote (upvote or downvote) on an OPTIX intelligence document. Community votes improve OPTIX scoring and feed personalisation.
 
@@ -542,7 +544,7 @@ Submits a relevance vote (upvote or downvote) on an OPTIX intelligence document.
 
 ---
 
-### `save_feed_view`
+### `feed.save_view`
 
 Saves a named feed filter configuration so the analyst can recall it later.
 
@@ -555,7 +557,7 @@ Saves a named feed filter configuration so the analyst can recall it later.
 
 ---
 
-### `triage_ioc`
+### `ioc.triage`
 
 Applies a triage verdict to one or more IOCs, recording analyst judgement about their disposition.
 
@@ -563,9 +565,35 @@ Applies a triage verdict to one or more IOCs, recording analyst judgement about 
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `entity_ids` | integer[] | Yes | List of OPTIX IOC entity IDs (find with `search_indicator`) |
+| `entity_ids` | integer[] | Yes | List of OPTIX IOC entity IDs (find with `search.indicator`) |
 | `status` | string | Yes | `confirmed`, `false_positive`, `benign`, `expired`, `monitoring`, or `unresolved` |
 | `scope` | string | No | `platform` (global decision, default) or `org` (organisation-scoped) |
+
+---
+
+### `actor.profile`
+
+Returns a rich, readable profile for a threat actor in a single call — no follow-up calls needed for the core picture. Accepts actor names and known aliases, resolving them automatically to the canonical entity name.
+
+**When to use:** "Tell me about APT28" / "What do we know about Fancy Bear?" / "Profile Lazarus Group."
+
+The response includes: actor profile and description, all known aliases, ATT&CK techniques with tactic names, IOCs grouped by type (IP, domain, hash, URL), linked malware families, number of related intelligence reports, and the latest report summary if one exists. To trigger deep AI research afterwards, use `entity.research` (15 credits). To generate a SIEM hunting query, use `entity.ask` (4 credits).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `actor_name` | string | Yes | Name or known alias of the threat actor (e.g. `APT29`, `Fancy Bear`, `LockBit`). Case-insensitive. |
+
+---
+
+### `actor.list`
+
+Lists all threat actors the workspace is currently tracking in OPTIX, including canonical names, known aliases, type, confidence, and first/last seen dates. Use this to browse the full actor inventory before diving into a specific profile with `actor.profile`.
+
+**When to use:** "What actors are we tracking?" / "Which threat groups do we have intelligence on?"
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | No | Optional cap on results. Omit to retrieve all tracked actors. |
 
 ---
 
@@ -610,7 +638,7 @@ All tools return structured error messages rather than raising exceptions to the
 | Error type | Cause | Response |
 |---|---|---|
 | `Authentication error` | Invalid or missing API key | Prompt the user to check their OPTIX API key |
-| `Insufficient credits` | Balance below the operation cost | Call `get_account_status` and wait for the reset date |
+| `Insufficient credits` | Balance below the operation cost | Call `account.status` and wait for the reset date |
 | `Not found` | Entity, document, or report does not exist | Verify the ID or name and try again |
 | `OPTIX API error` | Backend error or validation failure | Includes the original OPTIX error message for diagnosis |
 | `Validation error` | Invalid tool parameters | Includes field-level detail to correct the call |

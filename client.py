@@ -1351,7 +1351,7 @@ async def list_threat_actors(
             except Exception:
                 notes.append(
                     "Actor list fetch failed — results may be incomplete. "
-                    "Try calling `list_threat_actors` again or contact your OPTIX administrator."
+                    "Try calling `actor.list` again or contact your OPTIX administrator."
                 )
                 break
         except (OptixAuthError, OptixApiError):
@@ -1538,7 +1538,7 @@ async def get_threat_actor_profile(
         logger.debug("Intelligence report fetch failed for entity_id=%s: %s", entity.id, exc)
         enrichment_notes.append(
             "Intelligence report fetch failed — report count and summary may be unavailable. "
-            "Try calling `list_intelligence_reports` directly with entity_id for details."
+            "Try calling `report.list` directly with entity_id for details."
         )
 
     return ThreatActorProfile(

@@ -154,6 +154,63 @@ async def require_api_key(
         )
 
 
+async def optional_api_key(
+    request: Request,
+    x_api_key: Optional[str] = Security(_api_key_header),
+) -> str:
+    """Like require_api_key but allows unauthenticated access.
+
+    When no key is present, returns an empty string and sets an anonymous auth
+    context so that tool-discovery (initialize / tools/list) works without
+    credentials.  When a key IS present, full validation runs exactly as in
+    require_api_key — an invalid key still gets a 401 so callers can't bypass
+    validation by providing a bad key and hoping to be treated as anonymous.
+    """
+    if OPTIX_SKIP_AUTH:
+        anon_ctx = AuthContext(
+            api_key_id=0,
+            api_key_name="anonymous",
+            user_id=None,
+            org_id=None,
+            permissions=[],
+            credit_balance=None,
+            credit_allocation=None,
+            is_credit_exempt=False,
+            credit_reset_date=None,
+            is_org_pool=False,
+        )
+        current_auth.set(anon_ctx)
+        current_api_key.set("")
+        return ""
+
+    # Accept Authorization: Bearer <key> as an alias for X-API-Key.
+    if not x_api_key:
+        auth_header: str = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            x_api_key = auth_header[7:].strip() or None
+
+    if not x_api_key:
+        # No key provided — return anonymous context; tool invocation will
+        # catch the missing key and return a friendly MCP-level error.
+        current_auth.set(None)
+        current_api_key.set("")
+        return ""
+
+    try:
+        auth_ctx = await _validate_key_with_optix(x_api_key)
+        current_auth.set(auth_ctx)
+        current_api_key.set(x_api_key)
+        return x_api_key
+    except OptixAuthError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={
+                "error": exc.message,
+                "detail": "The supplied API key was rejected by the OPTIX backend.",
+            },
+        )
+
+
 def get_current_api_key() -> str:
     key = current_api_key.get()
     if not key:
